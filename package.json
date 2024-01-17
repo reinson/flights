@@ -1,0 +1,41 @@
+{
+  "name": "boilerplate",
+  "version": "0.0.1",
+  "main": "index.js",
+  "author": "engineering@sixfold.com",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=10.0.0"
+  },
+  "scripts": {
+    "copy-files": "cpy --flat src/data/airports.dat build/data/ && cpy --flat src/data/routes.dat build/data/",
+    "build": "tsc && yarn copy-files",
+    "build:clean": "rm -rf ./build && yarn build",
+    "dev": "TS_NODE_PROJECT='./tsconfig.json' ts-node-dev --respawn ./src src/index.ts",
+    "test": "jest",
+    "start": "yarn build && node build/index.js"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.2.5",
+    "@types/morgan": "^1.9.4",
+    "@types/node": "^18.11.18",
+    "@types/supertest": "^2.0.12",
+    "cpy-cli": "^4",
+    "jest": "^29.3.1",
+    "jest-extended": "^3.2.3",
+    "supertest": "^6.3.3",
+    "ts-jest": "^29.0.3",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "@types/express": "^4.17.15",
+    "csv-parse": "^4.14.1",
+    "express": "^4.18.2",
+    "morgan": "^1.10.0"
+  },
+  "resolutions": {
+    "**/debug": "^4"
+  }
+}

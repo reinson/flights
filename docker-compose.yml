@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  service:
+    build: .
+    ports:
+      - "3000:3000"
+  test:
+    build: .
+    command: ['yarn', 'test']
+    environment:
+      TZ: UTC
+      NODE_ENV: test
