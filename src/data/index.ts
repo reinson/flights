@@ -101,3 +101,25 @@ export async function loadRouteData(): Promise<Route[]> {
 		})
 		.filter(notNil);
 }
+
+export type GroupedRoutesBySource = {
+	[id: Airport['id']]: Route[];
+};
+
+export const groupRoutesBySource = (routes: Route[]): GroupedRoutesBySource => {
+	const groupedRoutes = routes.reduce<GroupedRoutesBySource>((groupedRoutes, route) => {
+		if (!groupedRoutes[route.source.id]) {
+			groupedRoutes[route.source.id] = [];
+		}
+
+		groupedRoutes[route.source.id].push(route);
+
+		return groupedRoutes;
+	}, {});
+
+	for (const sourceId in groupedRoutes) {
+		groupedRoutes[sourceId] = groupedRoutes[sourceId].sort((a, b) => a.distance - b.distance);
+	}
+
+	return groupedRoutes;
+};

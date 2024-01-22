@@ -2,7 +2,7 @@ import * as express from 'express';
 import * as morgan from 'morgan';
 
 import { notNil, flatten } from '../util';
-import { Airport, loadAirportData, loadRouteData } from '../data';
+import { Airport, Route, groupRoutesBySource, loadAirportData, loadRouteData } from '../data';
 
 export async function createApp() {
 	const app = express();
@@ -18,6 +18,9 @@ export async function createApp() {
 			),
 		),
 	);
+
+	const routes = await loadRouteData();
+	const routesBySource = groupRoutesBySource(routes);
 
 	app.use(morgan('tiny'));
 
@@ -49,7 +52,6 @@ export async function createApp() {
 			return res.status(404).send('No such airport, please provide a valid IATA/ICAO codes');
 		}
 
-		console.log(airports);
 		// TODO: Figure out the route from source to destination
 		console.log('No algorithm implemented');
 
