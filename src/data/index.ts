@@ -62,6 +62,21 @@ export async function loadAirportData(): Promise<Airport[]> {
 	}));
 }
 
+const removeRouteDuplicates = (routes: Route[]) => {
+	const existingKeys = new Set();
+	const cleanedRoutes = [];
+
+	routes.forEach((route: Route): void => {
+		const routeId = `${route.source.id}-${route.destination.id}`;
+		if (!existingKeys.has(routeId)) {
+			existingKeys.add(routeId);
+			cleanedRoutes.push(route);
+		}
+	});
+
+	return cleanedRoutes;
+};
+
 export async function loadRouteData(): Promise<Route[]> {
 	const airports = await loadAirportData();
 	const airportsById = new Map<string, Airport>(airports.map((airport) => [airport.id, airport] as const));
@@ -78,7 +93,7 @@ export async function loadRouteData(): Promise<Route[]> {
 	] as const;
 	const rows = await parseCSV(resolvePath(__dirname, './routes.dat'), columns);
 
-	return rows
+	const routes = rows
 		.filter((row) => row.stops === '0')
 		.map((row) => {
 			const source = airportsById.get(row.sourceID);
@@ -100,6 +115,8 @@ export async function loadRouteData(): Promise<Route[]> {
 			};
 		})
 		.filter(notNil);
+
+	return removeRouteDuplicates(routes);
 }
 
 export type GroupedRoutesBySource = {
