@@ -6,5 +6,6 @@
 		"outDir": "./build",
 		"types": ["jest", "jest-extended"]
 	},
-	"include": ["src/**/*.ts"]
+	"include": ["src/**/*.ts"],
+	"exclude": ["**/*.test.ts"],
 }

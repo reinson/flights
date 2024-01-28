@@ -4,6 +4,13 @@ import * as morgan from 'morgan';
 import { notNil, flatten } from '../util';
 import { Airport, Route, groupRoutesBySource, loadAirportData, loadRouteData } from '../data';
 
+const filterHavTay = (routes: Route[]) =>
+	routes.filter(({ destination, source }: Route) => {
+		return ['HAVNAS', 'NASJFK', 'JFKHEL', 'HELTAY', 'NASBOS', 'BOSKEF', 'KEFHEL'].includes(
+			source.iata + destination.iata,
+		);
+	});
+
 export async function createApp() {
 	const app = express();
 
@@ -19,7 +26,9 @@ export async function createApp() {
 		),
 	);
 
-	const routes = await loadRouteData();
+	const routesRaw = await loadRouteData();
+	const routes = filterHavTay(routesRaw);
+
 	const routesBySource = groupRoutesBySource(routes);
 
 	app.use(morgan('tiny'));
@@ -42,6 +51,7 @@ export async function createApp() {
 	app.get('/routes/:source/:destination', (req, res) => {
 		const source = req.params['source'];
 		const destination = req.params['destination'];
+		const allowedHops = +req.query.allowed_hops || 4;
 		if (source === undefined || destination === undefined) {
 			return res.status(400).send('Must provide source and destination airports');
 		}
@@ -56,25 +66,28 @@ export async function createApp() {
 			[airportId: Airport['id']]: {
 				distance: number;
 				hops: Airport['iata'][];
-				previousNode?: Airport;
 			};
 		};
 
 		const selectNextAirportToVisit = (shortestDistanceTable: ShortestDistanceTable, unvisitedAirports: Airport[]) =>
 			unvisitedAirports.reduce((currentMin, airport, index) => {
-				const distance = shortestDistanceTable[airport.id].distance;
-				if (!currentMin.distance || currentMin.distance > distance) {
-					return { distance, airport, index };
+				const tableEntry = shortestDistanceTable[airport.id];
+
+				if (tableEntry?.distance === undefined || tableEntry.hops.length >= allowedHops) {
+					return currentMin;
 				}
+
+				if (!currentMin.distance || currentMin.distance > tableEntry.distance) {
+					return { distance: tableEntry.distance, airport, index };
+				}
+
 				return currentMin;
 			}, {} as { distance: number; airport: Airport; index: number });
 
 		const isNewSmallestDistance = (distanceFromSource: number, currentSmallest?: number) =>
 			!currentSmallest || distanceFromSource < currentSmallest;
 
-		const visitedAirports: Airport['id'][] = [];
-		let unvisitedAirports: Airport[] = [sourceAirport];
-
+		let unvisitedAirports: Airport[] = [...airports];
 		const shortestDistance: ShortestDistanceTable = {
 			[sourceAirport.id]: {
 				distance: 0,
@@ -83,15 +96,16 @@ export async function createApp() {
 		};
 
 		while (true) {
-			if (unvisitedAirports.length === 0) {
-				break;
-			}
-
 			const {
 				distance,
 				airport: currentAirport,
 				index: currentAirportIndex,
 			} = selectNextAirportToVisit(shortestDistance, unvisitedAirports);
+
+			if (!currentAirport) {
+				break;
+			}
+
 			const currentAirportConnections = routesBySource[currentAirport.id] || [];
 
 			for (const connection of currentAirportConnections) {
@@ -100,36 +114,31 @@ export async function createApp() {
 				const currentSmallestDistance = shortestDistance[destinationId]?.distance;
 				if (isNewSmallestDistance(distanceFromSource, currentSmallestDistance)) {
 					shortestDistance[destinationId] = {
-						distance: distance + connection.distance,
+						distance: distanceFromSource,
 						hops: [...shortestDistance[currentAirport.id].hops, currentAirport.iata],
-						previousNode: currentAirport,
 					};
 				}
 			}
 
 			unvisitedAirports.splice(currentAirportIndex, 1);
-			visitedAirports.push(currentAirport.id);
-
-			if (shortestDistance[currentAirport.id].hops.length < 2) {
-				const setOfUnvisitedAirports = new Set([
-					...unvisitedAirports,
-					...currentAirportConnections
-						.map((connection: Route) => connection.destination)
-						.filter((airport: Airport) => !visitedAirports.includes(airport.id)),
-				]);
-				unvisitedAirports = Array.from(setOfUnvisitedAirports);
-			}
 		}
-		
-		console.log('......')
+
 		const { distance, hops } = shortestDistance[destinationAirport.id] || {};
-		console.log('🚀 ~ app.get ~ hops:', hops);
+
+		if (!distance) {
+			return res.status(404).send({
+				source,
+				destination,
+				allowed_hops: allowedHops,
+				message: 'not connected in allowed hops count',
+			});
+		}
 
 		return res.status(200).send({
 			source,
 			destination,
 			distance,
-			hops: [hops],
+			hops: [...hops, destinationAirport.iata],
 		});
 	});
 
