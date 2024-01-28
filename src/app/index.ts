@@ -11,6 +11,9 @@ const filterHavTay = (routes: Route[]) =>
 		);
 	});
 
+const isNewSmallestDistance = (distanceFromSource: number, currentSmallest?: number) =>
+	!currentSmallest || distanceFromSource < currentSmallest;
+
 const dijkstra = (
 	sourceAirport: Airport,
 	destinationAirport: Airport,
@@ -18,13 +21,6 @@ const dijkstra = (
 	airports: Airport[],
 	routesBySource: GroupedRoutesBySource,
 ) => {
-	type ShortestDistanceTable = {
-		[airportId: Airport['id']]: {
-			distance: number;
-			hops: Airport['iata'][];
-		};
-	};
-
 	const selectNextAirportToVisit = (shortestDistanceTable: ShortestDistanceTable, unvisitedAirports: Airport[]) =>
 		unvisitedAirports.reduce((currentMin, airport, index) => {
 			const tableEntry = shortestDistanceTable[airport.id];
@@ -40,10 +36,15 @@ const dijkstra = (
 			return currentMin;
 		}, {} as { distance: number; airport: Airport; index: number });
 
-	const isNewSmallestDistance = (distanceFromSource: number, currentSmallest?: number) =>
-		!currentSmallest || distanceFromSource < currentSmallest;
-
 	let unvisitedAirports: Airport[] = [...airports];
+
+	type ShortestDistanceTable = {
+		[airportId: Airport['id']]: {
+			distance: number;
+			hops: Airport['iata'][];
+		};
+	};
+
 	const shortestDistance: ShortestDistanceTable = {
 		[sourceAirport.id]: {
 			distance: 0,
@@ -82,6 +83,63 @@ const dijkstra = (
 	return shortestDistance[destinationAirport.id] || ({} as { distance?: number; hops: string[] });
 };
 
+const bruteForce = (
+	sourceAirport: Airport,
+	destinationAirport: Airport,
+	allowedHops: number,
+	airports: Airport[],
+	routesBySource: GroupedRoutesBySource,
+) => {
+	type ShortestDistanceTable = {
+		[airportId: Airport['id']]: {
+			distance: number;
+			hops: Airport[];
+		};
+	};
+
+	const shortestDistance: ShortestDistanceTable = {
+		[sourceAirport.id]: {
+			distance: 0,
+			hops: [],
+		},
+	};
+
+	const unfinishedTravels: { distance: number; hops: Airport[] }[] = [{ distance: 0, hops: [sourceAirport] }];
+
+	while (unfinishedTravels.length > 0) {
+		const travelToExtend = unfinishedTravels.pop();
+		const currentTravelEnd = travelToExtend.hops[travelToExtend.hops.length - 1];
+		const connectionsFromEnd = routesBySource[currentTravelEnd.id];
+
+		if (!connectionsFromEnd) {
+			continue;
+		}
+
+		for (const connection of connectionsFromEnd) {
+			const destinationId = connection.destination.id;
+			const distanceFromSource = travelToExtend.distance + connection.distance;
+			const currentSmallestDistance = shortestDistance[destinationId]?.distance;
+			const hopsToConnectionEnd = [...travelToExtend.hops, connection.destination];
+
+			if (isNewSmallestDistance(distanceFromSource, currentSmallestDistance)) {
+				shortestDistance[destinationId] = {
+					distance: distanceFromSource,
+					hops: hopsToConnectionEnd,
+				};
+			}
+
+			if (hopsToConnectionEnd.length <= allowedHops) {
+				unfinishedTravels.push({
+					distance: distanceFromSource,
+					hops: hopsToConnectionEnd,
+				});
+			}
+		}
+	}
+
+	return shortestDistance[destinationAirport.id] || ({} as { distance?: number; hops: string[] });
+};
+
 export async function createApp() {
 	const app = express();
 
@@ -97,8 +155,7 @@ export async function createApp() {
 		),
 	);
 
-	const routesRaw = await loadRouteData();
-	const routes = filterHavTay(routesRaw);
+	const routes = await loadRouteData();
 
 	const routesBySource = groupRoutesBySource(routes);
 
@@ -133,7 +190,7 @@ export async function createApp() {
 			return res.status(404).send('No such airport, please provide a valid IATA/ICAO codes');
 		}
 
-		const { distance, hops } = dijkstra(sourceAirport, destinationAirport, allowedHops, airports, routesBySource);
+		const { distance, hops } = bruteForce(sourceAirport, destinationAirport, allowedHops, airports, routesBySource);
 
 		if (!distance) {
 			return res.status(404).send({
@@ -148,7 +205,7 @@ export async function createApp() {
 			source,
 			destination,
 			distance,
-			hops: [...hops, destinationAirport.iata],
+			hops: hops.map((t) => t.iata),
 		});
 	});
 
