@@ -49,6 +49,64 @@ describe('server', () => {
 			},
 			TIMEOUT,
 		);
+
+		it(
+			'correctly routes from HAV to TAY in five hops',
+			async () => {
+				// https://www.greatcirclemap.com/?routes=%20HAV-NAS-BOS-KEF-HEL-TAY
+				const response = await request(server).get('/routes/HAV/TAY?allowed_hops=5');
+				const body = response.body;
+
+				expect(body.distance).toBeWithin(9100, 9200);
+				expect(body).toEqual(
+					expect.objectContaining({
+						source: 'HAV',
+						destination: 'TAY',
+						hops: ['HAV', 'NAS', 'BOS', 'KEF', 'HEL', 'TAY'],
+					}),
+				);
+			},
+			TIMEOUT,
+		);
+
+		it(
+			'correctly routes from HAV to TAY in three hops',
+			async () => {
+				// https://www.greatcirclemap.com/?routes=%20HAV-AMS-HEL-TAY
+				const response = await request(server).get('/routes/HAV/TAY?allowed_hops=3');
+				const body = response.body;
+
+				expect(body.distance).toBeWithin(9500, 9600);
+				expect(body).toEqual(
+					expect.objectContaining({
+						source: 'HAV',
+						destination: 'TAY',
+						hops: ['HAV', 'AMS', 'HEL', 'TAY'],
+					}),
+				);
+			},
+			TIMEOUT,
+		);
+
+		it(
+			'responds with 404 if airports are not connected in allowed hops count',
+			async () => {
+				const allowedHops = 2;
+				const response = await request(server).get('/routes/HAV/TAY?allowed_hops=' + allowedHops);
+				const body = response.body;
+
+				expect(response.status).toBe(404);
+				expect(body).toEqual(
+					expect.objectContaining({
+						source: 'HAV',
+						destination: 'TAY',
+						allowed_hops: allowedHops,
+						message: 'not connected in allowed hops count',
+					}),
+				);
+			},
+			TIMEOUT,
+		);
 	});
 
 	describe('routes extended via ground', () => {
