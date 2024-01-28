@@ -19,7 +19,15 @@ export interface Route {
 	source: Airport;
 	destination: Airport;
 	distance: number;
+	groundHopFrom?: Airport
 }
+
+interface AirportsGroundConnections {
+	[id: Airport['id']]: {
+		airport: Airport;
+		distance: number;
+	}[];
+};
 
 function parseCSV<T extends Readonly<string[]>>(
 	filePath: string,
@@ -139,4 +147,57 @@ export const groupRoutesBySource = (routes: Route[]): GroupedRoutesBySource => {
 	}
 
 	return groupedRoutes;
+};
+
+export const findAirportGroundConnections = (airports: Airport[]) => {
+	const airportGroundConnections: AirportsGroundConnections = airports.reduce((acc, airport: Airport) => {
+		acc[airport.id] = [];
+
+		return acc;
+	}, {});
+
+	airports.forEach((a1: Airport, index) => {
+		for (const a2 of airports.slice(index + 1)) {
+			const distance = haversine(
+				a1.location.latitude,
+				a1.location.longitude,
+				a2.location.latitude,
+				a2.location.longitude,
+			);
+			if (distance <= 100) {
+				airportGroundConnections[a1.id].push({ airport: a2, distance });
+				airportGroundConnections[a2.id].push({ airport: a1, distance });
+			}
+		}
+	});
+
+	return airportGroundConnections;
+};
+
+export const addOverGroundRoutes = (routes: Route[], airportGroundConnections: AirportsGroundConnections) => {
+	const allRoutes: Route[] = [...routes];
+
+	routes.forEach((route: Route) => {
+		const destinationGroundConnections = airportGroundConnections[route.destination.id];
+		destinationGroundConnections.forEach(({ airport, distance }) => {
+			allRoutes.push({
+				...route,
+				destination: airport,
+				distance: distance + route.distance,
+				groundHopFrom: route.destination,
+			});
+		});
+	});
+
+	return allRoutes;
+};
+
+export const prepareRoutesData = (routes: Route[], airports: Airport[]) => {
+	const airportsGroundConnections = findAirportGroundConnections(airports);
+	const routesWithGroundHops = addOverGroundRoutes(routes, airportsGroundConnections);
+
+	const routesBySource = groupRoutesBySource(routes);
+	const routesBySourceWithGroundHops = groupRoutesBySource(routesWithGroundHops);
+
+	return { routesBySource, routesBySourceWithGroundHops };
 };

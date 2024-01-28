@@ -2,8 +2,8 @@ import * as express from 'express';
 import * as morgan from 'morgan';
 
 import { notNil, flatten } from '../util';
-import { Airport, groupRoutesBySource, loadAirportData, loadRouteData } from '../data';
-import { bruteForce, dijkstra } from './algorithms';
+import { Airport, Route, loadAirportData, loadRouteData, prepareRoutesData } from '../data';
+import { findShortestDistances, dijkstra } from './algorithms';
 
 export async function createApp() {
 	const app = express();
@@ -21,8 +21,7 @@ export async function createApp() {
 	);
 
 	const routes = await loadRouteData();
-
-	const routesBySource = groupRoutesBySource(routes);
+	const { routesBySource, routesBySourceWithGroundHops } = prepareRoutesData(routes, airports);
 
 	app.use(morgan('tiny'));
 
@@ -45,6 +44,8 @@ export async function createApp() {
 		const source = req.params['source'];
 		const destination = req.params['destination'];
 		const allowedHops = +req.query.allowed_hops || 4;
+		const allowGroundHops = req.query.hasOwnProperty('with-ground-hops');
+
 		if (source === undefined || destination === undefined) {
 			return res.status(400).send('Must provide source and destination airports');
 		}
@@ -55,10 +56,11 @@ export async function createApp() {
 			return res.status(404).send('No such airport, please provide a valid IATA/ICAO codes');
 		}
 
-		const dijkstraShortestDistance = dijkstra(sourceAirport, airports, routesBySource);
-		const bruteForceShortest = bruteForce(sourceAirport, allowedHops, routesBySource, dijkstraShortestDistance);
-		const shortestToDestination = bruteForceShortest[destinationAirport.id];
-		
+		const routes = allowGroundHops ? routesBySourceWithGroundHops : routesBySource;
+		const shortestDistances = findShortestDistances(sourceAirport, allowedHops, routes, airports);
+
+		const shortestToDestination = shortestDistances[destinationAirport.id];
+
 		if (!shortestToDestination) {
 			return res.status(404).send({
 				source,
@@ -68,11 +70,16 @@ export async function createApp() {
 			});
 		}
 
+		const hopsIncludingGround = shortestToDestination.hops
+			.map((route: Route) => [route.groundHopFrom?.iata, route.destination.iata])
+			.flat()
+			.filter(notNil);
+
 		return res.status(200).send({
 			source,
 			destination,
 			distance: shortestToDestination.distance,
-			hops: shortestToDestination.hops.map((airport: Airport) => airport.iata),
+			hops: [sourceAirport.iata, ...hopsIncludingGround],
 		});
 	});
 

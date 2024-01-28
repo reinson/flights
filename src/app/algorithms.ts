@@ -1,9 +1,9 @@
-import { Airport, GroupedRoutesBySource } from '../data';
+import { Airport, GroupedRoutesBySource, Route } from '../data';
 
 type ShortestDistanceTable = {
 	[airportId: Airport['id']]: {
 		distance: number;
-		hops: Airport[];
+		hops: Route[];
 	};
 };
 
@@ -15,20 +15,17 @@ export const dijkstra = (sourceAirport: Airport, airports: Airport[], routesBySo
 		unvisitedAirports.reduce((currentMin, airport, index) => {
 			const tableEntry = shortestDistanceTable[airport.id];
 
-			if (tableEntry?.distance === undefined) {
+			if (!tableEntry || (currentMin.distance && currentMin.distance < tableEntry.distance)) {
 				return currentMin;
 			}
 
-			if (!currentMin.distance || currentMin.distance > tableEntry.distance) {
-				return { distance: tableEntry.distance, airport, index };
-			}
+			return { distance: tableEntry.distance, airport, index };
 
-			return currentMin;
 		}, {} as { distance: number; airport: Airport; index: number });
 
-	let unvisitedAirports: Airport[] = [...airports];
+	const unvisitedAirports: Airport[] = [...airports];
 
-	const shortestDistance: ShortestDistanceTable = {
+	const shortestDistances: ShortestDistanceTable = {
 		[sourceAirport.id]: {
 			distance: 0,
 			hops: [],
@@ -40,7 +37,7 @@ export const dijkstra = (sourceAirport: Airport, airports: Airport[], routesBySo
 			distance,
 			airport: currentAirport,
 			index: currentAirportIndex,
-		} = selectNextAirportToVisit(shortestDistance, unvisitedAirports);
+		} = selectNextAirportToVisit(shortestDistances, unvisitedAirports);
 
 		if (!currentAirport) {
 			break;
@@ -51,11 +48,11 @@ export const dijkstra = (sourceAirport: Airport, airports: Airport[], routesBySo
 		for (const connection of currentAirportConnections) {
 			const distanceFromSource = distance + connection.distance;
 			const destinationId = connection.destination.id;
-			const currentSmallestDistance = shortestDistance[destinationId]?.distance;
+			const currentSmallestDistance = shortestDistances[destinationId]?.distance;
 			if (isNewSmallestDistance(distanceFromSource, currentSmallestDistance)) {
-				shortestDistance[destinationId] = {
+				shortestDistances[destinationId] = {
 					distance: distanceFromSource,
-					hops: [...shortestDistance[currentAirport.id].hops, currentAirport],
+					hops: [...shortestDistances[currentAirport.id].hops, connection],
 				};
 			}
 		}
@@ -63,60 +60,63 @@ export const dijkstra = (sourceAirport: Airport, airports: Airport[], routesBySo
 		unvisitedAirports.splice(currentAirportIndex, 1);
 	}
 
-	return shortestDistance;
+	return shortestDistances;
 };
 
-export const bruteForce = (
+export const findShortestDistances = (
 	sourceAirport: Airport,
 	allowedHops: number,
 	routesBySource: GroupedRoutesBySource,
-	dijkstraShortestDistance: ShortestDistanceTable,
+	airports: Airport[],
 ) => {
-	const shortestDistance: ShortestDistanceTable = {
+	const dijkstraShortestDistance = dijkstra(sourceAirport, airports, routesBySource);
+	
+	const shortestDistances: ShortestDistanceTable = {
 		[sourceAirport.id]: {
 			distance: 0,
 			hops: [],
 		},
 	};
 
-	const unfinishedTravels: { distance: number; hops: Airport[] }[] = [{ distance: 0, hops: [sourceAirport] }];
+	const unfinishedTravels: { distance: number; location: Airport['id']; hops: Route[] }[] = [
+		{ distance: 0, location: sourceAirport.id, hops: [] },
+	];
 
 	while (unfinishedTravels.length > 0) {
 		const travelToExtend = unfinishedTravels.pop();
-		const currentTravelEnd = travelToExtend.hops[travelToExtend.hops.length - 1];
-		const connectionsFromEnd = routesBySource[currentTravelEnd.id];
+		const connectionsFromTravelEnd = routesBySource[travelToExtend.location];
 
-		if (!connectionsFromEnd) {
+		if (!connectionsFromTravelEnd) {
 			continue;
 		}
 
-		for (const connection of connectionsFromEnd) {
+		for (const connection of connectionsFromTravelEnd) {
 			const destinationId = connection.destination.id;
 			const distanceFromSource = travelToExtend.distance + connection.distance;
-			const currentSmallestDistance = shortestDistance[destinationId]?.distance;
-			const hopsToConnectionEnd = [...travelToExtend.hops, connection.destination];
+			const currentSmallestDistance = shortestDistances[destinationId]?.distance;
+			const hopsToConnectionEnd = [...travelToExtend.hops, connection];
 
 			if (isNewSmallestDistance(distanceFromSource, currentSmallestDistance)) {
-				shortestDistance[destinationId] = {
+				shortestDistances[destinationId] = {
 					distance: distanceFromSource,
 					hops: hopsToConnectionEnd,
 				};
 			}
 
 			const { hops: dijkstraHops, distance: dijkstraDistance } = dijkstraShortestDistance[destinationId];
-			const dijkstraHopsWithDestination = dijkstraHops.length + 1;
 
 			if (
-				hopsToConnectionEnd.length <= allowedHops &&
-				(dijkstraHopsWithDestination > hopsToConnectionEnd.length || dijkstraDistance === distanceFromSource)
+				hopsToConnectionEnd.length < allowedHops &&
+				(dijkstraHops.length > hopsToConnectionEnd.length || dijkstraDistance === distanceFromSource)
 			) {
 				unfinishedTravels.push({
 					distance: distanceFromSource,
+					location: destinationId,
 					hops: hopsToConnectionEnd,
 				});
 			}
 		}
 	}
 
-	return shortestDistance;
+	return shortestDistances;
 };

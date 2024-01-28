@@ -92,7 +92,7 @@ describe('server', () => {
 			'responds with 404 if airports are not connected in allowed hops count',
 			async () => {
 				const allowedHops = 2;
-				const response = await request(server).get('/routes/HAV/TAY?allowed_hops=' + allowedHops);
+				const response = await request(server).get(`/routes/HAV/TAY?allowed_hops=${allowedHops}`);
 				const body = response.body;
 
 				expect(response.status).toBe(404);
