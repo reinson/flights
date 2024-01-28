@@ -1,4 +1,4 @@
-import { Airport, GroupedRoutesBySource, Route } from "../data";
+import { Airport, GroupedRoutesBySource } from '../data';
 
 type ShortestDistanceTable = {
 	[airportId: Airport['id']]: {
@@ -104,9 +104,11 @@ export const bruteForce = (
 			}
 
 			const { hops: dijkstraHops, distance: dijkstraDistance } = dijkstraShortestDistance[destinationId];
+			const dijkstraHopsWithDestination = dijkstraHops.length + 1;
+
 			if (
 				hopsToConnectionEnd.length <= allowedHops &&
-				(dijkstraHops.length >= allowedHops || dijkstraDistance === distanceFromSource)
+				(dijkstraHopsWithDestination > hopsToConnectionEnd.length || dijkstraDistance === distanceFromSource)
 			) {
 				unfinishedTravels.push({
 					distance: distanceFromSource,
