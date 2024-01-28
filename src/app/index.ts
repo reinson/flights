@@ -4,6 +4,13 @@ import * as morgan from 'morgan';
 import { notNil, flatten } from '../util';
 import { Airport, GroupedRoutesBySource, Route, groupRoutesBySource, loadAirportData, loadRouteData } from '../data';
 
+type ShortestDistanceTable = {
+	[airportId: Airport['id']]: {
+		distance: number;
+		hops: Airport[];
+	};
+};
+
 const filterHavTay = (routes: Route[]) =>
 	routes.filter(({ destination, source }: Route) => {
 		return ['HAVNAS', 'NASJFK', 'JFKHEL', 'HELTAY', 'NASBOS', 'BOSKEF', 'KEFHEL'].includes(
@@ -14,18 +21,12 @@ const filterHavTay = (routes: Route[]) =>
 const isNewSmallestDistance = (distanceFromSource: number, currentSmallest?: number) =>
 	!currentSmallest || distanceFromSource < currentSmallest;
 
-const dijkstra = (
-	sourceAirport: Airport,
-	destinationAirport: Airport,
-	allowedHops: number,
-	airports: Airport[],
-	routesBySource: GroupedRoutesBySource,
-) => {
+const dijkstra = (sourceAirport: Airport, airports: Airport[], routesBySource: GroupedRoutesBySource) => {
 	const selectNextAirportToVisit = (shortestDistanceTable: ShortestDistanceTable, unvisitedAirports: Airport[]) =>
 		unvisitedAirports.reduce((currentMin, airport, index) => {
 			const tableEntry = shortestDistanceTable[airport.id];
 
-			if (tableEntry?.distance === undefined || tableEntry.hops.length >= allowedHops) {
+			if (tableEntry?.distance === undefined) {
 				return currentMin;
 			}
 
@@ -37,13 +38,6 @@ const dijkstra = (
 		}, {} as { distance: number; airport: Airport; index: number });
 
 	let unvisitedAirports: Airport[] = [...airports];
-
-	type ShortestDistanceTable = {
-		[airportId: Airport['id']]: {
-			distance: number;
-			hops: Airport['iata'][];
-		};
-	};
 
 	const shortestDistance: ShortestDistanceTable = {
 		[sourceAirport.id]: {
@@ -72,7 +66,7 @@ const dijkstra = (
 			if (isNewSmallestDistance(distanceFromSource, currentSmallestDistance)) {
 				shortestDistance[destinationId] = {
 					distance: distanceFromSource,
-					hops: [...shortestDistance[currentAirport.id].hops, currentAirport.iata],
+					hops: [...shortestDistance[currentAirport.id].hops, currentAirport],
 				};
 			}
 		}
@@ -80,23 +74,16 @@ const dijkstra = (
 		unvisitedAirports.splice(currentAirportIndex, 1);
 	}
 
-	return shortestDistance[destinationAirport.id] || ({} as { distance?: number; hops: string[] });
+	return shortestDistance;
 };
 
 const bruteForce = (
 	sourceAirport: Airport,
 	destinationAirport: Airport,
 	allowedHops: number,
-	airports: Airport[],
 	routesBySource: GroupedRoutesBySource,
+	dijkstraShortestDistance: ShortestDistanceTable,
 ) => {
-	type ShortestDistanceTable = {
-		[airportId: Airport['id']]: {
-			distance: number;
-			hops: Airport[];
-		};
-	};
-
 	const shortestDistance: ShortestDistanceTable = {
 		[sourceAirport.id]: {
 			distance: 0,
@@ -128,7 +115,11 @@ const bruteForce = (
 				};
 			}
 
-			if (hopsToConnectionEnd.length <= allowedHops) {
+			const { hops: dijkstraHops, distance: dijkstraDistance } = dijkstraShortestDistance[destinationId];
+			if (
+				hopsToConnectionEnd.length <= allowedHops &&
+				(dijkstraHops.length >= allowedHops || dijkstraDistance === distanceFromSource)
+			) {
 				unfinishedTravels.push({
 					distance: distanceFromSource,
 					hops: hopsToConnectionEnd,
@@ -137,7 +128,7 @@ const bruteForce = (
 		}
 	}
 
-	return shortestDistance[destinationAirport.id] || ({} as { distance?: number; hops: string[] });
+	return shortestDistance[destinationAirport.id] || ({} as { distance?: number; hops: Airport[] });
 };
 
 export async function createApp() {
@@ -190,7 +181,14 @@ export async function createApp() {
 			return res.status(404).send('No such airport, please provide a valid IATA/ICAO codes');
 		}
 
-		const { distance, hops } = bruteForce(sourceAirport, destinationAirport, allowedHops, airports, routesBySource);
+		const dijkstraShortestDistance = dijkstra(sourceAirport, airports, routesBySource);
+		const { distance, hops } = bruteForce(
+			sourceAirport,
+			destinationAirport,
+			allowedHops,
+			routesBySource,
+			dijkstraShortestDistance,
+		);
 
 		if (!distance) {
 			return res.status(404).send({
@@ -205,7 +203,7 @@ export async function createApp() {
 			source,
 			destination,
 			distance,
-			hops: hops.map((t) => t.iata),
+			hops: hops.map((h: Airport) => h.iata),
 		});
 	});
 
