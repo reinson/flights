@@ -49,6 +49,7 @@ export const dijkstra = (sourceAirport: Airport, airports: Airport[], routesBySo
 			const distanceFromSource = distance + connection.distance;
 			const destinationId = connection.destination.id;
 			const currentSmallestDistance = shortestDistances[destinationId]?.distance;
+
 			if (isNewSmallestDistance(distanceFromSource, currentSmallestDistance)) {
 				shortestDistances[destinationId] = {
 					distance: distanceFromSource,

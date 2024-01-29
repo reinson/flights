@@ -19,7 +19,7 @@ export interface Route {
 	source: Airport;
 	destination: Airport;
 	distance: number;
-	groundHopFrom?: Airport
+	groundHopFrom?: Airport;
 }
 
 interface AirportsGroundConnections {
@@ -27,7 +27,7 @@ interface AirportsGroundConnections {
 		airport: Airport;
 		distance: number;
 	}[];
-};
+}
 
 function parseCSV<T extends Readonly<string[]>>(
 	filePath: string,
@@ -131,8 +131,8 @@ export type GroupedRoutesBySource = {
 	[id: Airport['id']]: Route[];
 };
 
-export const groupRoutesBySource = (routes: Route[]): GroupedRoutesBySource => {
-	const groupedRoutes = routes.reduce<GroupedRoutesBySource>((groupedRoutes, route) => {
+export const groupRoutesBySource = (routes: Route[]): GroupedRoutesBySource =>
+	routes.reduce<GroupedRoutesBySource>((groupedRoutes, route) => {
 		if (!groupedRoutes[route.source.id]) {
 			groupedRoutes[route.source.id] = [];
 		}
@@ -141,13 +141,6 @@ export const groupRoutesBySource = (routes: Route[]): GroupedRoutesBySource => {
 
 		return groupedRoutes;
 	}, {});
-
-	for (const sourceId in groupedRoutes) {
-		groupedRoutes[sourceId] = groupedRoutes[sourceId].sort((a, b) => a.distance - b.distance);
-	}
-
-	return groupedRoutes;
-};
 
 export const findAirportGroundConnections = (airports: Airport[]) => {
 	const airportGroundConnections: AirportsGroundConnections = airports.reduce((acc, airport: Airport) => {
