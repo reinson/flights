@@ -22,6 +22,10 @@ export interface Route {
 	groundHopFrom?: Airport;
 }
 
+export interface GroupedRoutesBySource {
+	[id: Airport['id']]: Route[];
+};
+
 interface AirportsGroundConnections {
 	[id: Airport['id']]: {
 		airport: Airport;
@@ -127,10 +131,6 @@ export async function loadRouteData(): Promise<Route[]> {
 	return removeRouteDuplicates(routes);
 }
 
-export type GroupedRoutesBySource = {
-	[id: Airport['id']]: Route[];
-};
-
 export const groupRoutesBySource = (routes: Route[]): GroupedRoutesBySource =>
 	routes.reduce<GroupedRoutesBySource>((groupedRoutes, route) => {
 		if (!groupedRoutes[route.source.id]) {
@@ -143,11 +143,7 @@ export const groupRoutesBySource = (routes: Route[]): GroupedRoutesBySource =>
 	}, {});
 
 export const findAirportGroundConnections = (airports: Airport[]) => {
-	const airportGroundConnections: AirportsGroundConnections = airports.reduce((acc, airport: Airport) => {
-		acc[airport.id] = [];
-
-		return acc;
-	}, {});
+	const airportGroundConnections: AirportsGroundConnections = Object.fromEntries(airports.map(airport => [airport.id, []]))
 
 	airports.forEach((a1: Airport, index) => {
 		for (const a2 of airports.slice(index + 1)) {
@@ -157,6 +153,7 @@ export const findAirportGroundConnections = (airports: Airport[]) => {
 				a2.location.latitude,
 				a2.location.longitude,
 			);
+
 			if (distance <= 100) {
 				airportGroundConnections[a1.id].push({ airport: a2, distance });
 				airportGroundConnections[a2.id].push({ airport: a1, distance });
@@ -172,11 +169,12 @@ export const addOverGroundRoutes = (routes: Route[], airportGroundConnections: A
 
 	routes.forEach((route: Route) => {
 		const destinationGroundConnections = airportGroundConnections[route.destination.id];
-		destinationGroundConnections.forEach(({ airport, distance }) => {
+
+		destinationGroundConnections.forEach(({ airport: airportAccessibleViaGround, distance: groundDistance }) => {
 			allRoutes.push({
 				...route,
-				destination: airport,
-				distance: distance + route.distance,
+				destination: airportAccessibleViaGround,
+				distance: groundDistance + route.distance,
 				groundHopFrom: route.destination,
 			});
 		});

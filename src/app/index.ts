@@ -3,7 +3,9 @@ import * as morgan from 'morgan';
 
 import { notNil, flatten } from '../util';
 import { Airport, Route, loadAirportData, loadRouteData, prepareRoutesData } from '../data';
-import { findShortestDistances, dijkstra } from './algorithms';
+import { findShortestDistances } from './algorithms';
+
+const DEFAULT_ALLOWED_HOPS_COUNT = 4;
 
 export async function createApp() {
 	const app = express();
@@ -43,7 +45,7 @@ export async function createApp() {
 	app.get('/routes/:source/:destination', (req, res) => {
 		const source = req.params['source'];
 		const destination = req.params['destination'];
-		const allowedHops = +req.query.allowed_hops || 4;
+		const allowedHops = +req.query.allowed_hops || DEFAULT_ALLOWED_HOPS_COUNT;
 		const allowGroundHops = req.query.hasOwnProperty('with-ground-hops');
 
 		if (source === undefined || destination === undefined) {
@@ -58,7 +60,6 @@ export async function createApp() {
 
 		const routes = allowGroundHops ? routesBySourceWithGroundHops : routesBySource;
 		const shortestDistances = findShortestDistances(sourceAirport, allowedHops, routes, airports);
-
 		const shortestToDestination = shortestDistances[destinationAirport.id];
 
 		if (!shortestToDestination) {
