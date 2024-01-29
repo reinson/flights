@@ -62,7 +62,7 @@ export async function createApp() {
 		const shortestDistances = findShortestDistances(sourceAirport, allowedHops, routes, airports);
 		const shortestToDestination = shortestDistances[destinationAirport.id];
 
-		if (!shortestToDestination) {
+		if (shortestToDestination.distance === Infinity) {
 			return res.status(404).send({
 				source,
 				destination,
