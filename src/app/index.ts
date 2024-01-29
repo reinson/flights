@@ -45,7 +45,7 @@ export async function createApp() {
 	app.get('/routes/:source/:destination', (req, res) => {
 		const source = req.params['source'];
 		const destination = req.params['destination'];
-		const allowedHops = +req.query.allowed_hops || DEFAULT_ALLOWED_HOPS_COUNT;
+		const allowedHops = +req.query['allowed-hops'] || DEFAULT_ALLOWED_HOPS_COUNT;
 		const allowGroundHops = req.query.hasOwnProperty('with-ground-hops');
 
 		if (source === undefined || destination === undefined) {
@@ -66,7 +66,7 @@ export async function createApp() {
 			return res.status(404).send({
 				source,
 				destination,
-				allowed_hops: allowedHops,
+				allowedHops: allowedHops,
 				message: 'not connected in allowed hops count',
 			});
 		}

@@ -1,36 +1,45 @@
-# Transporeon Visibility Hub backend test-task
-
-## Task description
-
-The test task consists of two parts, the main part, and a bonus part. We suggest tackling the bonus part once the main objective of the service has been achieved.
-
-The task is to build a JSON over HTTP API endpoint that takes as input two IATA/ICAO airport codes and provides as output a route between these two airports so that:
-
-1. The route consists of at most 4 legs/flights (that is, 3 stops/layovers, if going from A->B, a valid route could be A->1->2->3->B, or for example A->1->B etc.) and;
-2. The route is the shortest such route as measured in kilometers of geographical distance.
-
-For the bonus part, extend your service so that it also allows changing airports during stops that are within 100km of each other. For example, if going from A->B, a valid route could be A->1->2=>3->4->B, where “2=>3” is a change of airports done via ground. Multiple ground hops are allowed, but they cannot be consecutive. These switches are not considered as part of the legs/layover/hop count, but their distance should be reflected in the final distance calculated for the route.
-
-The bonus part should be opt-in by providing a query parameter `with-ground-hops` to the request.
-
-Notes:
-
-1. The weekdays and flight times are not important for the purposes of the test task - you are free to assume that all flights can depart any required time
-2. You are free to choose to use any open-source libraries
-3. You can ask additional questions
-
-## Service
+# Shortest flight path finder
 
 In this repository, you will find an [express](https://www.npmjs.com/package/express) service written in [typescript](https://www.npmjs.com/package/typescript). The repository assumes you have configured [Yarn](https://yarnpkg.com) and [Node.js (18+)](https://nodejs.org/en/) on your system.
 
-Your goal is to modify this service so that it fulfills the requirements of the test task.
+It has a JSON over HTTP API endpoint that takes as input two IATA/ICAO airport codes and provides as output a route between these two airports so that:
 
-The service is already configured with data from [OpenFlights](https://openflights.org/data.html), which albeit outdated, will work fine for the purposes of this test task.
+1. The route consists of at most n legs/flights (for example if n=4 then there can be 3 stops/layovers, if going from A->B, a valid route could be A->1->2->3->B, or for example A->1->B etc.) and;
+2. The route is the shortest such route as measured in kilometers of geographical distance.
 
-The service also includes a set of tests, which can be executed via `yarn test`, these represent two cases for the first part and one case for the second part of the task. Once you are confident that your solution works, these tests should pass. **Notice that these tests also enforce a specific response format for your service.**
+The api endpoint has two optional query parameters:
+1. `allowed-hops` - that sets the maximum number of allowed hops (default = 4)
+2. `with-ground-hops` - allows to switch airports that are closer than 100km apart via ground
 
-## Docker
+## Explanation of the solution
 
-The service is also setup to run in docker, you can use the docker-compose file to run either the service itself (exposes the same port 3000 as with `yarn start`/`yarn start:dev`) - `docker-compose up -d service`.
+The solution uses dijkstra minimum distance algorithm and combines it with a "brute force" algorithm that intends to travel all the possible routes in the given hops limit.
 
-You can also run the tests via `docker-compose up test`.
+Dijkstra is an efficient algorithm that finds the shortest distance to any node from a source node, but it does not work with a hops limit.
+
+"Brute force" algorithm is very slow on its own as the number of potential paths to travel increases quickly as the connections from airports and allowed hops count grow. Combining these two approaches helps to keep it performant and consider hop count limit.
+
+Having dijkstra data available allows continuing a travel if:
+
+-   the limit of allowed hops is not met yet
+-   and this is the dijkstra's shortest path or it is possible to get to the current point with fewer hops compared to dijkstra
+
+![diagram](./algorithm_diagram.png)
+
+## Performance measurements
+
+I used HAV-TAY route with different hop limits to measure how fast the solution implementation works and compared it to "brute force" implemenation. All measurements in ms.
+
+| Hops limit | Solution (with ground hops) | Solution (without ground hops) | Brute force (with ground hops) | Brute force (without ground hops)  |
+| ---------- | --------------------------- | ------------------------------ | ------------------------------------------- | ------------------------ |
+| 3          | 484                         | 264                            | 245                                         | 47                       |
+| 4          | 705                         | 289                            | 20127                                       | 487                      |
+| 5          | 1547                        | 350                            |                                             | 30500                    |
+| 6          | 1834                        | 428                            |                                             |                          |
+
+Dijkstra: 247 (with ground hops), 260 (without ground hops)
+
+## Limitation of the solution
+
+Current implemenation with ground hops doesnt allow the travel to begin with one. Ground hops are allowed in the middle and in the end of the travel but not in the start. It could be implemented by adding the ground connected airports to starting lists of the two algorithms.
+
