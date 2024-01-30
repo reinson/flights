@@ -7,6 +7,14 @@ type ShortestDistanceTable = {
 	};
 };
 
+export enum Algorithm {
+	BruteForce = 'force',
+	BruteForcePlus = 'plus',
+	BruteForceDijkstra = 'dijkstra',
+}
+
+type Travel = { distance: number; location: Airport['id']; hops: Route[] };
+
 const selectNextAirportToVisit = (shortestDistanceTable: ShortestDistanceTable, unvisitedAirports: Airport[]) =>
 	unvisitedAirports.reduce<{ distance: number; airport: Airport; index: number } | null>(
 		(currentMin, airport, index) => {
@@ -61,50 +69,73 @@ export const findShortestDistances = (
 	allowedHops: number,
 	routesBySource: GroupedRoutesBySource,
 	airports: Airport[],
+	algorithm: Algorithm = Algorithm.BruteForcePlus,
 ) => {
-	const dijkstraShortestDistance = dijkstra(sourceAirport, airports, routesBySource);
+	const dijkstraShortestDistance =
+		algorithm === Algorithm.BruteForceDijkstra && dijkstra(sourceAirport, airports, routesBySource);
 
 	const shortestDistances: ShortestDistanceTable = Object.fromEntries(
 		airports.map((a) => [a.id, { distance: a.id === sourceAirport.id ? 0 : Infinity, hops: [] }]),
 	);
 
-	const unfinishedTravels: { distance: number; location: Airport['id']; hops: Route[] }[] = [
-		{ distance: 0, location: sourceAirport.id, hops: [] },
-	];
+	const unfinishedTravels: Travel[] = [{ distance: 0, location: sourceAirport.id, hops: [] }];
+
+	const shouldExtendTravel = {
+		[Algorithm.BruteForce]: (travel: Travel) => travel.hops.length < allowedHops,
+
+		[Algorithm.BruteForcePlus]: (travel: Travel) => {
+			const { distance: currentSmallestDistance, hops: currentSmallestHops } = shortestDistances[travel.location];
+
+			return (
+				shouldExtendTravel[Algorithm.BruteForce](travel) &&
+				(travel.distance < currentSmallestDistance || travel.hops.length < currentSmallestHops.length)
+			);
+		},
+
+		[Algorithm.BruteForceDijkstra]: (travel: Travel) => {
+			const { hops: dijkstraHops, distance: dijkstraDistance } = dijkstraShortestDistance[travel.location];
+
+			return (
+				shouldExtendTravel[Algorithm.BruteForcePlus](travel) &&
+				(dijkstraHops.length > travel.hops.length || dijkstraDistance === travel.distance)
+			);
+		},
+	};
 
 	while (unfinishedTravels.length > 0) {
 		const travelToExtend = unfinishedTravels.pop();
 		const connectionsFromTravelEnd = routesBySource[travelToExtend.location] || [];
 
 		for (const connection of connectionsFromTravelEnd) {
-			const destinationId = connection.destination.id;
-			const distanceFromSource = travelToExtend.distance + connection.distance;
-			const currentSmallestDistance = shortestDistances[destinationId]?.distance;
-			const newHops = [...travelToExtend.hops, connection];
+			const newTravel = {
+				distance: travelToExtend.distance + connection.distance,
+				location: connection.destination.id,
+				hops: [...travelToExtend.hops, connection],
+			};
 
-			if (distanceFromSource < currentSmallestDistance) {
-				shortestDistances[destinationId] = {
-					distance: distanceFromSource,
-					hops: newHops,
-				};
+			if (shouldExtendTravel[algorithm](newTravel)) {
+				unfinishedTravels.push(newTravel);
 			}
 
-			const { hops: dijkstraHops, distance: dijkstraDistance } = dijkstraShortestDistance[destinationId];
-
-			// continue this travel if the limit of allowed hops is not met yet
-			// and it is possible to get to destination with fewer hops compared to dijkstra or this is the dijkstra path
-			if (
-				newHops.length < allowedHops &&
-				(dijkstraHops.length > newHops.length || dijkstraDistance === distanceFromSource)
-			) {
-				unfinishedTravels.push({
-					distance: distanceFromSource,
-					location: destinationId,
-					hops: newHops,
-				});
+			if (newTravel.distance < shortestDistances[newTravel.location].distance) {
+				shortestDistances[newTravel.location] = {
+					distance: newTravel.distance,
+					hops: newTravel.hops,
+				};
 			}
 		}
 	}
 
 	return shortestDistances;
 };
+
+export const readAlgoFromQuery = (input: string): Algorithm => {
+	switch (input) {
+		case Algorithm.BruteForce: 
+			return Algorithm.BruteForce
+		case Algorithm.BruteForceDijkstra:
+			return Algorithm.BruteForceDijkstra
+		default:
+			return Algorithm.BruteForcePlus
+	}
+}

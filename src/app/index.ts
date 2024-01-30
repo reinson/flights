@@ -3,7 +3,7 @@ import * as morgan from 'morgan';
 
 import { notNil, flatten } from '../util';
 import { Airport, Route, loadAirportData, loadRouteData, prepareRoutesData } from '../data';
-import { findShortestDistances } from './algorithms';
+import { findShortestDistances, readAlgoFromQuery } from './algorithms';
 
 const DEFAULT_ALLOWED_HOPS_COUNT = 4;
 
@@ -47,6 +47,7 @@ export async function createApp() {
 		const destination = req.params['destination'];
 		const allowedHops = +req.query['allowed-hops'] || DEFAULT_ALLOWED_HOPS_COUNT;
 		const allowGroundHops = req.query.hasOwnProperty('with-ground-hops');
+		const algorithm = readAlgoFromQuery(`${req.query.algo}`);
 
 		if (source === undefined || destination === undefined) {
 			return res.status(400).send('Must provide source and destination airports');
@@ -59,7 +60,7 @@ export async function createApp() {
 		}
 
 		const routes = allowGroundHops ? routesBySourceWithGroundHops : routesBySource;
-		const shortestDistances = findShortestDistances(sourceAirport, allowedHops, routes, airports);
+		const shortestDistances = findShortestDistances(sourceAirport, allowedHops, routes, airports, algorithm);
 		const shortestToDestination = shortestDistances[destinationAirport.id];
 
 		if (shortestToDestination.distance === Infinity) {
