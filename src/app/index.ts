@@ -5,7 +5,7 @@ import { notNil, flatten } from '../util';
 import { Airport, Route, loadAirportData, loadRouteData, prepareRoutesData } from '../data';
 import { findShortestDistances, readAlgoFromQuery } from './algorithms';
 
-const DEFAULT_ALLOWED_HOPS_COUNT = 4;
+const MAX_FLIGHTS_COUNT = 4;
 
 export async function createApp() {
 	const app = express();
@@ -45,7 +45,7 @@ export async function createApp() {
 	app.get('/routes/:source/:destination', (req, res) => {
 		const source = req.params['source'];
 		const destination = req.params['destination'];
-		const allowedHops = +req.query['allowed-hops'] || DEFAULT_ALLOWED_HOPS_COUNT;
+		const allowedHops = +req.query['max-flights-count'] || MAX_FLIGHTS_COUNT;
 		const allowGroundHops = req.query.hasOwnProperty('with-ground-hops');
 		const algorithm = readAlgoFromQuery(`${req.query.algo}`);
 
@@ -68,7 +68,7 @@ export async function createApp() {
 				source,
 				destination,
 				allowedHops: allowedHops,
-				message: 'not connected in allowed hops count',
+				message: 'not connected in allowed flights count',
 			});
 		}
 

@@ -4,7 +4,7 @@ import { resolve as resolvePath } from 'path';
 
 import { notNil, haversine } from '../util';
 
-const GROUND_HOP_MAX_DISTANCE = 100;
+const GROUND_HOP_MAX_DISTANCE_KILOMETERS = 100;
 
 export interface Airport {
 	id: string;
@@ -156,7 +156,7 @@ export const findAirportGroundConnections = (airports: Airport[]) => {
 				a2.location.longitude,
 			);
 
-			if (distance <= GROUND_HOP_MAX_DISTANCE) {
+			if (distance <= GROUND_HOP_MAX_DISTANCE_KILOMETERS) {
 				airportGroundConnections[a1.id].push({ airport: a2, distance });
 				airportGroundConnections[a2.id].push({ airport: a1, distance });
 			}
